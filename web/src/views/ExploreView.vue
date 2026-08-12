@@ -56,7 +56,7 @@
 
       <!-- 操作按钮 -->
       <div class="action-row">
-        <van-button round block type="primary" color="#102d2a" @click="generateTrip">
+        <van-button round block type="primary" color="#102d2a" :loading="store.planning" loading-text="规划中..." @click="generateTrip">
           生成我的行程
         </van-button>
         <van-button round block plain color="#102d2a" @click="showDestination = true">
@@ -208,7 +208,7 @@
           <van-checkbox name="避开高原">避开高原</van-checkbox>
         </van-checkbox-group>
         <div class="popup-actions">
-          <van-button round block type="primary" color="#102d2a" @click="saveRoute">
+          <van-button round block type="primary" color="#102d2a" :loading="store.planning" loading-text="规划中..." @click="saveRoute">
             保存并重新生成
           </van-button>
         </div>
@@ -290,19 +290,29 @@ const showInvite = ref(false)
 const showProfile = ref(false)
 const friendName = ref('')
 
-function generateTrip() {
+async function generateTrip() {
   store.activeDay = 0
-  showToast('已生成专属行程')
+  const res = await store.planTrip()
+  if (res.ok) {
+    showToast('已生成专属行程')
+  } else {
+    showToast(res.error || '规划失败，请稍后重试')
+  }
 }
 
-function saveRoute() {
+async function saveRoute() {
   showRouteForm.value = false
-  showToast('路线已更新')
+  await generateTrip()
 }
 
-function confirmDestination() {
+async function confirmDestination() {
   showDestination.value = false
-  showToast(`目的地已设置为 ${store.destination}`)
+  const res = await store.planTrip()
+  if (res.ok) {
+    showToast(`已按 ${store.destination} 重新规划`)
+  } else {
+    showToast(res.error || '规划失败')
+  }
 }
 
 function sendInvite() {

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { tripApi, favoriteApi, type PlanInput } from '../api'
 
 export interface Spot {
   name: string
@@ -17,6 +18,26 @@ export interface RouteConfig {
   days: number
   stops: string[]
   spots: Spot[]
+  /** 后端返回的完整数据（智能规划结果），如果存在则 schedule 优先使用它 */
+  _backend?: {
+    tripId?: string
+    originLoc?: string
+    destLoc?: string
+    polyline?: any
+    totalDistance?: number
+    totalDuration?: number
+    days: Array<{
+      dayIndex: number
+      date?: string
+      startLocation?: string
+      endLocation: string
+      distanceKm?: number
+      driveMinutes?: number
+      stops?: any[]
+      supply?: any[]
+      events: Array<{ time: string; title: string; desc: string; icon: string; poiId?: string; location?: string; category?: string }>
+    }>
+  }
 }
 
 export interface ScheduleEvent {
@@ -37,7 +58,8 @@ export interface Friend {
   avatar: string
 }
 
-export const routes: RouteConfig[] = [
+// ====== 内置经典路线（本地兜底 & 默认展示） ======
+const builtinRoutes: RouteConfig[] = [
   {
     no: '01', name: '川西小环线', origin: '成都市', destination: '稻城', distance: '1,240 km', days: 7,
     stops: ['都江堰', '映秀', '四姑娘山', '丹巴', '八美', '新都桥', '理塘', '稻城'],
@@ -71,6 +93,8 @@ export const routes: RouteConfig[] = [
 ]
 
 export const useRouteStore = defineStore('route', () => {
+  // 可扩展的路线列表（默认含内置经典路线，后续可追加后端规划结果/模板/用户行程）
+  const routesList = ref<RouteConfig[]>([...builtinRoutes])
   const routeIndex = ref(0)
   const origin = ref('成都市')
   const destination = ref('稻城')
@@ -79,10 +103,14 @@ export const useRouteStore = defineStore('route', () => {
   const favorites = ref<string[]>(JSON.parse(localStorage.getItem('xingye-favorites') || '[]'))
   const friends = ref<Friend[]>(JSON.parse(localStorage.getItem('xingye-friends') || '[]'))
   const selectedPreferences = ref<string[]>(['自然风光', '当地美食'])
-  const drivePreference = ref('轻松')
+  const drivePreference = ref<'轻松' | '适中' | '高效'>('轻松')
   const customNeed = ref('')
+  const vehicleType = ref<'gas' | 'ev'>('gas')
+  const planning = ref(false)
+  const planError = ref('')
+  const planCounter = ref(0) // 规划路线计数，用于生成 no
 
-  const currentRoute = computed(() => routes[routeIndex.value])
+  const currentRoute = computed(() => routesList.value[routeIndex.value] || routesList.value[0])
 
   const filteredSpots = computed(() => {
     if (filter.value === '全部') return currentRoute.value.spots
@@ -94,6 +122,7 @@ export const useRouteStore = defineStore('route', () => {
     return `${r.origin.replace(/市$/, '')} → ${r.stops.slice(1, -1).join(' → ')} → ${r.destination}`
   })
 
+  // ====== 本地兜底行程构建（当无后端数据时使用，保持原有 UI 表现） ======
   function buildSchedule(route: RouteConfig, orig: string, dest: string): DaySchedule[] {
     const stops = [orig.replace(/市$/, ''), ...route.stops]
     stops[stops.length - 1] = dest
@@ -118,7 +147,18 @@ export const useRouteStore = defineStore('route', () => {
     })
   }
 
-  const schedule = computed(() => buildSchedule(currentRoute.value, origin.value, destination.value))
+  // ====== 优先使用后端返回的日程 ======
+  const schedule = computed<DaySchedule[]>(() => {
+    const r = currentRoute.value
+    if (r._backend && r._backend.days.length > 0) {
+      return r._backend.days.map(d => ({
+        day: String(d.dayIndex + 1).padStart(2, '0'),
+        location: d.endLocation,
+        events: d.events.map(e => ({ time: e.time, title: e.title, desc: e.desc, icon: e.icon }))
+      }))
+    }
+    return buildSchedule(r, origin.value, destination.value)
+  })
 
   const currentEvents = computed(() => {
     if (schedule.value.length === 0) return []
@@ -138,9 +178,24 @@ export const useRouteStore = defineStore('route', () => {
     return schedule.value[idx].day
   })
 
+  // 当前路线的后端原始数据（供地图/导航/邀请协作者等扩展使用）
+  const currentBackendData = computed(() => currentRoute.value._backend || null)
+  const totalDistanceKm = computed(() => {
+    const b = currentRoute.value._backend?.totalDistance
+    if (b) return Math.round(b / 1000)
+    return parseInt(currentRoute.value.distance.replace(/[^0-9]/g, '')) || 0
+  })
+
   function switchRoute() {
-    routeIndex.value = (routeIndex.value + 1) % routes.length
+    routeIndex.value = (routeIndex.value + 1) % routesList.value.length
     activeDay.value = 0
+  }
+
+  function selectRoute(index: number) {
+    if (index >= 0 && index < routesList.value.length) {
+      routeIndex.value = index
+      activeDay.value = 0
+    }
   }
 
   function toggleFavorite(spotName: string) {
@@ -151,6 +206,8 @@ export const useRouteStore = defineStore('route', () => {
       favorites.value.push(spotName)
     }
     localStorage.setItem('xingye-favorites', JSON.stringify(favorites.value))
+    // 非阻塞同步后端
+    favoriteApi.toggle(spotName, spotName, 'spot').catch(() => {})
   }
 
   function isFavorite(spotName: string): boolean {
@@ -164,11 +221,127 @@ export const useRouteStore = defineStore('route', () => {
     }
   }
 
+  /**
+   * 调用后端智能规划 API，并将结果转成 RouteConfig 追加到 routesList 头部并切换
+   * 保持现有 UI 不变，但行程数据来自真实地理计算。
+   */
+  async function planTrip(input?: Partial<PlanInput>): Promise<{ ok: boolean; error?: string }> {
+    planning.value = true
+    planError.value = ''
+    try {
+      const payload: PlanInput = {
+        origin: input?.origin ?? origin.value,
+        destination: input?.destination ?? destination.value,
+        days: input?.days ?? currentRoute.value.days,
+        drivePref: input?.drivePref ?? drivePreference.value,
+        vehicleType: input?.vehicleType ?? vehicleType.value,
+        preferences: input?.preferences ?? selectedPreferences.value,
+        customNeed: input?.customNeed ?? customNeed.value,
+        title: input?.title,
+        templateId: input?.templateId,
+      }
+      const res = await tripApi.plan(payload)
+      if (!res.ok || !res.data) {
+        planError.value = res.error || '规划失败'
+        return { ok: false, error: planError.value }
+      }
+      const p = res.data
+
+      // 转换 spots：直接用后端返回的 spots（PlanSpot 数组）
+      const spots: Spot[] = (p.spots || []).slice(0, 8).map((s: any) => ({
+        name: s.name,
+        type: s.type || '景点',
+        info: s.info || '',
+        image: s.image || (s.type === '美食'
+          ? 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=600&q=80'
+          : 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=80'),
+      }))
+
+      // 转换 stops：提取所有天落脚点名称，去重
+      const stopNames: string[] = []
+      const stopsFromSchedule: string[] = []
+      ;(p.schedule || []).forEach((d: any) => {
+        if (d.location && !stopsFromSchedule.includes(d.location)) stopsFromSchedule.push(d.location)
+      })
+      ;(p.stops || []).forEach((s: any) => {
+        if (s.name && !stopNames.includes(s.name)) stopNames.push(s.name)
+      })
+      const stops = stopsFromSchedule.length > 0 ? stopsFromSchedule : (stopNames.length > 0 ? stopNames : [payload.origin, payload.destination])
+
+      planCounter.value += 1
+      const newRoute: RouteConfig = {
+        no: `P${planCounter.value}`.padStart(2, '0'),
+        name: p.title || `${payload.origin} → ${payload.destination}`,
+        origin: p.origin || payload.origin,
+        destination: p.destination || payload.destination,
+        distance: `${(p.totalDistance || 0).toLocaleString()} km`,
+        days: p.schedule?.length || payload.days,
+        stops,
+        spots: spots.length > 0 ? spots : currentRoute.value.spots,
+        _backend: {
+          tripId: p.tripId,
+          originLoc: p.originLoc,
+          destLoc: p.destLoc,
+          polyline: p.polyline,
+          totalDistance: (p.totalDistance || 0) * 1000, // km → 米，对齐原有字段语义
+          totalDuration: (p.totalDuration || 0) * 60,     // 分钟 → 秒
+          days: (p.schedule || []).map((d: any) => ({
+            dayIndex: (d.day || 1) - 1,
+            date: d.date,
+            startLocation: d.startLocation,
+            endLocation: d.location,
+            distanceKm: d.distanceKm,
+            driveMinutes: d.driveMinutes,
+            stops: (p.stops || []).filter((s: any) => s.sort === undefined || true),
+            supply: [],
+            events: (d.events || []).map((e: any) => ({
+              time: e.time,
+              title: e.title,
+              desc: e.desc,
+              icon: e.icon,
+              poiId: e.poiId,
+              location: e.location,
+              category: e.category,
+            })),
+          })),
+        },
+      }
+
+      // 更新 store 里的 origin/destination，保证默认值跟随最新规划
+      origin.value = payload.origin
+      destination.value = payload.destination
+      drivePreference.value = payload.drivePref as any
+      vehicleType.value = payload.vehicleType as any
+      if (payload.preferences) selectedPreferences.value = payload.preferences
+      if (payload.customNeed !== undefined) customNeed.value = payload.customNeed
+
+      // 插入到最前面并切换
+      routesList.value.unshift(newRoute)
+      routeIndex.value = 0
+      activeDay.value = 0
+      return { ok: true }
+    } catch (e: any) {
+      planError.value = e?.message || '规划异常'
+      return { ok: false, error: planError.value }
+    } finally {
+      planning.value = false
+    }
+  }
+
   return {
+    // 原有 state（保持兼容）
+    routesList,
     routeIndex, origin, destination, filter, activeDay,
     favorites, friends, selectedPreferences, drivePreference, customNeed,
+    // 新增 state
+    vehicleType, planning, planError,
+    // computed（保持兼容 + 新增）
     currentRoute, filteredSpots, routePath, schedule, currentEvents,
-    currentLocation, currentDayLabel,
-    switchRoute, toggleFavorite, isFavorite, addFriend
+    currentLocation, currentDayLabel, currentBackendData, totalDistanceKm,
+    // methods（保持兼容 + 新增）
+    switchRoute, selectRoute, toggleFavorite, isFavorite, addFriend, planTrip,
   }
 })
+
+/** @deprecated 兼容旧版直接 import 的写法，新代码请通过 store.routesList 访问 */
+export const routes: RouteConfig[] = builtinRoutes

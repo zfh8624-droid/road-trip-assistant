@@ -38,12 +38,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { showToast } from 'vant'
-import { useRouteStore, routes } from '../stores/route'
+import { useRouteStore } from '../stores/route'
 
 const store = useRouteStore()
 
 const favoriteSpots = computed(() => {
-  return routes.flatMap(r => r.spots).filter(s => store.isFavorite(s.name))
+  return store.routesList.flatMap(r => r.spots).filter(s => store.isFavorite(s.name))
 })
 </script>
 
