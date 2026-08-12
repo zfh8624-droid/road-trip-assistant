@@ -27,15 +27,17 @@ export const useUserStore = defineStore('user', () => {
     loading.value = true
     try {
       // 优先复用本地token，否则匿名登录拿一个
-      let res = token.value ? await authApi.me() : null
-      if (!res?.ok) {
-        res = await authApi.guestLogin()
-        if (res.ok && res.data?.token) {
-          token.value = res.data.token
-          localStorage.setItem('xingye-token', res.data.token)
+      const res = token.value ? await authApi.me() : null
+      if (res?.ok && res.data) {
+        applyUser(res.data)
+      } else {
+        const loginRes = await authApi.guestLogin()
+        if (loginRes.ok && loginRes.data?.token) {
+          token.value = loginRes.data.token
+          localStorage.setItem('xingye-token', loginRes.data.token)
         }
+        if (loginRes.ok && loginRes.data?.user) applyUser(loginRes.data.user)
       }
-      if (res?.ok && res.data?.user) applyUser(res.data.user)
     } finally {
       loading.value = false
       ready.value = true

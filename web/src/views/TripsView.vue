@@ -92,7 +92,7 @@
             v-for="(day, i) in detailTrip.schedule"
             :key="day.day"
             :class="['day-tab', { active: detailDayIdx === i }]"
-            @click="detailDayIdx = i"
+            @click="detailDayIdx = Number(i)"
           >
             DAY<b>{{ String(day.day).padStart(2, '0') }}</b>
           </span>

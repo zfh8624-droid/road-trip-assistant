@@ -45,7 +45,7 @@ export interface PlanInput {
 }
 
 export const tripApi = {
-  list: () => http.get<any[]>('/api/trips'),
+  list: () => http.get<{ trips: any[] }>('/api/trips'),
   get: (id: string) => http.get<any>(`/api/trips/${id}`),
   plan: (input: PlanInput) => http.post<any>('/api/trips/plan', input),
   create: (data: any) => http.post<any>('/api/trips', data),

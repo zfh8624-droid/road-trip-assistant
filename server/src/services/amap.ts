@@ -124,7 +124,7 @@ export async function driving(origin: string, destination: string, waypoints?: s
     polyline: s.polyline || '',
   }))
   // 拼接所有 step 的 polyline 为完整路线
-  const fullPolyline = steps.map(s => s.polyline).filter(Boolean).join(';')
+  const fullPolyline = steps.map((s: { polyline: string }) => s.polyline).filter(Boolean).join(';')
   return {
     origin,
     destination,
