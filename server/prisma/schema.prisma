@@ -8,36 +8,46 @@ datasource db {
 }
 
 model User {
-  id String @id @default(cuid())
-  openid String @unique
-  nickname String?
+  id        String   @id @default(cuid())
+  openid    String   @unique
+  nickname  String?
   avatarUrl String?
   createdAt DateTime @default(now())
-  trips TripMember[]
-  favorites Favorite[]
-  sentInvites Invitation[] @relation("sent")
+  trips          TripMember[]
+  favorites      Favorite[]
+  sentInvites    Invitation[] @relation("sent")
   receivedInvites Invitation[] @relation("received")
 }
 
 model Trip {
-  id String @id @default(cuid())
-  title String
-  origin String
-  destination String
-  distanceKm Int?
-  days Int
-  preferences Json?
-  createdAt DateTime @default(now())
-  members TripMember[]
-  schedule TripDay[]
-  stops TripStop[]
-  invitations Invitation[]
+  id            String   @id @default(cuid())
+  title         String
+  origin        String
+  destination   String
+  originLoc     String?  // lng,lat 起点坐标
+  destLoc       String?  // lng,lat 终点坐标
+  distanceKm    Int?     // 真实总里程（公里）
+  totalDistance Int?     // 真实总里程（米）
+  totalDuration Int?     // 真实总时长（秒）
+  days          Int
+  drivePref     String?  @default("轻松") // 轻松|适中|高效
+  vehicleType   String?  @default("gas")  // gas|ev
+  preferences   Json?    // 路线偏好标签数组
+  polyline      Json?    // 高德路线 polyline 数组
+  coverImage    String?
+  status        String   @default("draft") // draft|planning|ongoing|completed
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  members       TripMember[]
+  schedule      TripDay[]
+  stops         TripStop[]
+  invitations   Invitation[]
 }
 
 model TripMember {
   tripId String
   userId String
-  role   String @default("member")
+  role   String @default("member") // owner|member
   trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -45,34 +55,51 @@ model TripMember {
 }
 
 model TripDay {
-  id       String @id @default(cuid())
-  tripId   String
-  day      Int
-  location String
-  events   Json
-  trip     Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  id            String @id @default(cuid())
+  tripId        String
+  day           Int
+  date          DateTime? // 对应日期（可空）
+  location      String    // 当天落脚点/终点城市
+  startLocation String?   // 当天出发地名
+  distanceKm    Int?      // 当日里程（公里）
+  driveMinutes  Int?      // 当日驾驶时长（分钟）
+  events        Json      // 事件数组 [{time,title,desc,icon,location,poiId,...}]
+  polyline      Json?     // 当日路段 polyline
+  trip          Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
 
   @@unique([tripId, day])
 }
 
 model TripStop {
-  id        String @id @default(cuid())
-  tripId    String
-  name      String
-  category  String
-  sort      Int
-  latitude  Float?
-  longitude Float?
-  metadata  Json?
-  trip      Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  id          String  @id @default(cuid())
+  tripId      String
+  name        String
+  category    String  // 景点|美食|起点|终点|住宿|途经
+  type        String? // 兼容：与 category 含义一致
+  sort        Int
+  poiId       String? // 高德 POI ID
+  address     String?
+  tel         String?
+  latitude    Float?
+  longitude   Float?
+  location    String?  // lng,lat 组合
+  stayMinutes Int?     // 建议停留时长（分钟）
+  arrivalTime String?  // 预计到达时间 HH:mm
+  cost        Int?     // 预计花费（元）
+  image       String?
+  info        String?
+  metadata    Json?
+  trip        Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }
 
 model Favorite {
   userId    String
+  poiId     String?  // 高德POI ID（可选）
   placeName String
-  category  String?
+  category  String?  // 景点|美食|路线
   metadata  Json?
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, placeName])
 }
@@ -83,9 +110,28 @@ model Invitation {
   inviterId   String
   inviteeId   String?
   inviteeName String?
-  status      String   @default("pending")
+  token       String?  @unique // 分享链接用的邀请码
+  permission  String?  @default("edit") // view | edit
+  status      String   @default("pending") // pending|accepted|rejected
   createdAt   DateTime @default(now())
   trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
   inviter     User     @relation("sent", fields: [inviterId], references: [id])
   invitee     User?    @relation("received", fields: [inviteeId], references: [id])
+}
+
+model PoiCache {
+  id        String   @id @default(cuid())
+  poiId     String   @unique
+  name      String
+  location  String   // lng,lat
+  address   String?
+  tel       String?
+  type      String   // 景点|美食|加油站|充电站|酒店|城市
+  rating    Float?
+  photos    Json?
+  province  String?
+  city      String?
+  district  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
