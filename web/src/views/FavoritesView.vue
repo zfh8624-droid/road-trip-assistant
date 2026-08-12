@@ -36,11 +36,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useRouteStore } from '../stores/route'
 
 const store = useRouteStore()
+
+onMounted(() => { store.loadFavorites() })
 
 const favoriteSpots = computed(() => {
   return store.routesList.flatMap(r => r.spots).filter(s => store.isFavorite(s.name))

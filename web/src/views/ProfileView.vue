@@ -13,18 +13,27 @@
       <h2 class="page-title">我的自驾空间</h2>
 
       <div class="profile-header">
-        <div class="avatar">我</div>
+        <div class="avatar">{{ userStore.avatar }}</div>
         <div>
-          <b>自驾旅行者</b>
+          <b>{{ userStore.nickname }}</b>
           <p>轻松驾驶 · 自然风光 · 当地美食</p>
         </div>
       </div>
 
       <div class="profile-stats">
-        <div class="stat"><b>1</b><span>我的行程</span></div>
+        <div class="stat"><b>{{ tripCount }}</b><span>我的行程</span></div>
         <div class="stat"><b>{{ store.favorites.length }}</b><span>收藏地点</span></div>
         <div class="stat"><b>{{ store.friends.length }}</b><span>同行好友</span></div>
       </div>
+
+      <!-- 编辑昵称 -->
+      <div class="section-head">
+        <h2>个人信息</h2>
+      </div>
+      <van-cell-group inset>
+        <van-cell title="昵称" :value="userStore.nickname" is-link @click="showNickEdit = true" />
+        <van-cell title="用户ID" :value="userStore.userId?.slice(0, 8) || '未登录'" />
+      </van-cell-group>
 
       <div class="section-head">
         <h2>同行人</h2>
@@ -46,6 +55,19 @@
       </van-button>
     </main>
 
+    <!-- 编辑昵称 -->
+    <van-popup v-model:show="showNickEdit" position="bottom" round :style="{ height: '30%' }">
+      <div class="popup-content">
+        <h3>修改昵称</h3>
+        <van-field v-model="nickInput" label="昵称" placeholder="输入新昵称" />
+        <div class="popup-actions">
+          <van-button round block type="primary" color="#102d2a" :loading="saving" @click="saveNickname">
+            保存
+          </van-button>
+        </div>
+      </div>
+    </van-popup>
+
     <!-- 邀请好友 -->
     <van-popup v-model:show="showInvite" position="bottom" round :style="{ height: '40%' }">
       <div class="popup-content">
@@ -63,13 +85,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { showToast } from 'vant'
 import { useRouteStore } from '../stores/route'
+import { useUserStore } from '../stores/user'
 
 const store = useRouteStore()
+const userStore = useUserStore()
 const showInvite = ref(false)
 const friendName = ref('')
+const showNickEdit = ref(false)
+const nickInput = ref('')
+const saving = ref(false)
+
+const tripCount = computed(() => store.routesList.filter(r => r._backend?.tripId).length)
+
+async function saveNickname() {
+  if (!nickInput.value.trim()) return
+  saving.value = true
+  try {
+    await userStore.updateProfile(nickInput.value.trim())
+    showNickEdit.value = false
+    showToast('昵称已更新')
+  } catch {
+    showToast('更新失败')
+  } finally {
+    saving.value = false
+  }
+}
 
 function sendInvite() {
   const text = `邀请你加入我的自驾行程：${store.routePath}，建议 ${store.currentRoute.days} 日`

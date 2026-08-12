@@ -11,11 +11,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useUserStore } from './stores/user'
 
 const route = useRoute()
 const activeTab = ref(0)
+const userStore = useUserStore()
+
+// 应用启动时自动登录（匿名登录获取 token）
+onMounted(() => { userStore.ensureLogin() })
 
 const tabMap: Record<string, number> = {
   explore: 0, trips: 1, favorites: 2, profile: 3

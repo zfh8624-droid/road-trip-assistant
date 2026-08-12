@@ -198,16 +198,47 @@ export const useRouteStore = defineStore('route', () => {
     }
   }
 
-  function toggleFavorite(spotName: string) {
+  async function toggleFavorite(spotName: string) {
     const idx = favorites.value.indexOf(spotName)
-    if (idx > -1) {
-      favorites.value.splice(idx, 1)
-    } else {
+    const isFav = idx === -1 // 将要变成收藏
+    if (isFav) {
       favorites.value.push(spotName)
+    } else {
+      favorites.value.splice(idx, 1)
     }
     localStorage.setItem('xingye-favorites', JSON.stringify(favorites.value))
-    // 非阻塞同步后端
-    favoriteApi.toggle(spotName, spotName, 'spot').catch(() => {})
+    // 同步后端
+    try {
+      const res = await favoriteApi.toggle(spotName, spotName, 'spot')
+      if (!res.ok) {
+        // 回滚
+        if (isFav) {
+          favorites.value = favorites.value.filter(f => f !== spotName)
+        } else {
+          favorites.value.push(spotName)
+        }
+        localStorage.setItem('xingye-favorites', JSON.stringify(favorites.value))
+      }
+    } catch {
+      // 网络失败保持本地状态
+    }
+  }
+
+  /** 从后端加载收藏列表并合并到本地 */
+  async function loadFavorites() {
+    try {
+      const res = await favoriteApi.list()
+      if (res.ok && Array.isArray(res.data)) {
+        const backendNames = res.data.map((f: any) => f.poiName || f.name)
+        // 合并后端数据到本地
+        backendNames.forEach((name: string) => {
+          if (!favorites.value.includes(name)) favorites.value.push(name)
+        })
+        localStorage.setItem('xingye-favorites', JSON.stringify(favorites.value))
+      }
+    } catch {
+      // 静默失败
+    }
   }
 
   function isFavorite(spotName: string): boolean {
@@ -339,7 +370,7 @@ export const useRouteStore = defineStore('route', () => {
     currentRoute, filteredSpots, routePath, schedule, currentEvents,
     currentLocation, currentDayLabel, currentBackendData, totalDistanceKm,
     // methods（保持兼容 + 新增）
-    switchRoute, selectRoute, toggleFavorite, isFavorite, addFriend, planTrip,
+    switchRoute, selectRoute, toggleFavorite, isFavorite, addFriend, loadFavorites, planTrip,
   }
 })
 
