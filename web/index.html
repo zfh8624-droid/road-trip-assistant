@@ -11,5 +11,9 @@
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
+    <!-- hash 路由兜底：无 hash 时自动跳到 #/explore -->
+    <script>
+      if (!location.hash) location.replace('#/explore')
+    </script>
   </body>
 </html>

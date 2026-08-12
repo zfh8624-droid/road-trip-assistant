@@ -34,4 +34,9 @@ const router = createRouter({
   ]
 })
 
+// hash 路由首次加载时 redirect 可能不触发，加守卫兜底
+router.beforeEach((to) => {
+  if (to.path === '/') return '/explore'
+})
+
 export default router
