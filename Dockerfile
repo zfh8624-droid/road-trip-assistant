@@ -1,57 +1,75 @@
 # ============================================================
-# Zeabur 部署 —— 行野 · 自驾出行（纯静态前端）
-# 基础镜像：nginx:stable-alpine（轻量、安全）
+# 行野 · 自驾出行助手  多阶段 Docker 构建
+# 产出：一个 Node Runtime 镜像，同时托管前端 SPA + 后端 API
+# 部署平台：Zeabur / 自建 VPS / 任何支持 Docker 的环境
+# 启动时自动：环境变量检查 → Prisma migrate deploy → 启动服务
 # ============================================================
-FROM nginx:stable-alpine
 
-# ---------- 元数据标签（Zeabur 控制台可读） ----------
+# ========== Stage 1: 构建前端 ==========
+FROM node:20-alpine AS web-builder
+LABEL stage=intermediate
+WORKDIR /build/web
+
+COPY web/package.json web/package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci --silent; else npm install --silent; fi
+
+COPY web/tsconfig*.json ./
+COPY web/vite.config.ts ./
+COPY web/index.html ./
+COPY web/src ./src
+RUN npm run build 2>&1 | tail -20
+
+# ========== Stage 2: 构建后端 ==========
+FROM node:20-alpine AS server-builder
+LABEL stage=intermediate
+WORKDIR /build/server
+
+COPY server/package.json server/package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev --silent; else npm install --omit=dev --silent; fi
+# optionalDependencies: pg （默认不装，但生产镜像一定要有 pg 驱动）
+RUN npm install pg --save-optional --silent
+
+COPY server/prisma ./prisma
+RUN npx prisma generate
+
+COPY server/tsconfig.json ./
+COPY server/src ./src
+RUN npm run build 2>&1 | tail -20
+
+# ========== Stage 3: 运行镜像 ==========
+FROM node:20-alpine AS runner
 LABEL maintainer="Xingye Road Trip"
-LABEL description="行野自驾出行 —— 全国自驾路线规划 Web 应用"
+LABEL description="行野 · 全国自驾路线规划助手（前端SPA + Node API + PostgreSQL）"
 LABEL io.zeabur.app.name="road-trip-assistant"
 
-# ---------- 自定义 nginx 配置 ----------
-# 开启 gzip 压缩，设置合理缓存策略，监听 Zeabur 推荐端口 8080
-RUN rm -f /etc/nginx/conf.d/default.conf
-COPY <<'EOF' /etc/nginx/conf.d/default.conf
-server {
-    listen       8080;
-    server_name  _;
-    root         /usr/share/nginx/html;
-    index        index.html;
+ENV NODE_ENV=production
+ENV PORT=8080
+ENV TZ=Asia/Shanghai
 
-    # gzip 压缩（HTML / CSS / JS / 字体）
-    gzip on;
-    gzip_types text/html text/css application/javascript image/svg+xml font/woff2;
-    gzip_min_length 1024;
-    gzip_vary on;
+WORKDIR /app/server
 
-    # 静态资源缓存（图片、字体等带 hash 的资源可长期缓存）
-    location /assets/ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
+# --- 后端产物 + 依赖 ---
+COPY --from=server-builder /build/server/package.json /app/server/package.json
+COPY --from=server-builder /build/server/node_modules /app/server/node_modules
+COPY --from=server-builder /build/server/dist        /app/server/dist
+COPY --from=server-builder /build/server/prisma      /app/server/prisma
+COPY server/scripts/entrypoint.sh                    /app/server/scripts/entrypoint.sh
 
-    # 主页面 —— 不缓存确保内容即时更新
-    location / {
-        expires -1;
-        add_header Cache-Control "no-cache";
-        try_files $uri /index.html;
-    }
-}
-EOF
+# --- 前端静态资源（拷到 server/public，Fastify 静态插件会读）---
+COPY --from=web-builder /build/web/dist /app/server/public
 
-# ---------- 复制静态文件 ----------
-COPY index.html /usr/share/nginx/html/index.html
-COPY assets/    /usr/share/nginx/html/assets/
+# --- 运行时权限与启动入口 ---
+RUN chmod +x /app/server/scripts/entrypoint.sh \
+ && chown -R node:node /app
 
-# ---------- 安全：非 root 运行 ----------
-RUN chown -R nginx:nginx /usr/share/nginx/html && \
-    chmod -R 755 /usr/share/nginx/html
-USER nginx
+# --- 健康检查：/health 接口（Zeabur 会定期探活） ---
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:${PORT}/health >/dev/null || exit 1
 
-# ---------- Zeabur 端口（Web 服务默认 8080） ----------
 EXPOSE 8080
 
-# ---------- 健康检查 ----------
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8080/ >/dev/null || exit 1
+# 非 root 启动（更安全）
+USER node
+
+# 入口：环境变量检查 → prisma migrate deploy → node dist/index.js
+ENTRYPOINT ["sh", "/app/server/scripts/entrypoint.sh"]
