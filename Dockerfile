@@ -24,10 +24,9 @@ FROM node:20-alpine AS server-builder
 LABEL stage=intermediate
 WORKDIR /build/server
 
+# 安装全部依赖（含 devDeps：prisma generate 和 tsc 构建需要）
 COPY server/package.json server/package-lock.json* ./
-RUN if [ -f package-lock.json ]; then npm ci --omit=dev --silent; else npm install --omit=dev --silent; fi
-# optionalDependencies: pg （默认不装，但生产镜像一定要有 pg 驱动）
-RUN npm install pg --save-optional --silent
+RUN if [ -f package-lock.json ]; then npm ci --silent; else npm install --silent; fi
 
 COPY server/prisma ./prisma
 RUN npx prisma generate
@@ -48,9 +47,13 @@ ENV TZ=Asia/Shanghai
 
 WORKDIR /app/server
 
-# --- 后端产物 + 依赖 ---
-COPY --from=server-builder /build/server/package.json /app/server/package.json
-COPY --from=server-builder /build/server/node_modules /app/server/node_modules
+# 生产依赖（不含 devDeps，但保留 prisma CLI 用于 entrypoint 的 migrate/generate）
+COPY server/package.json server/package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev --silent; else npm install --omit=dev --silent; fi \
+ && npm install pg --save-optional --silent \
+ && npm install prisma --save-dev --silent
+
+# --- 后端产物 ---
 COPY --from=server-builder /build/server/dist        /app/server/dist
 COPY --from=server-builder /build/server/prisma      /app/server/prisma
 COPY server/scripts/entrypoint.sh                    /app/server/scripts/entrypoint.sh
