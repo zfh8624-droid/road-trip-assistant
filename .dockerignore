@@ -1,0 +1,9 @@
+.git
+.gitignore
+work
+outputs
+miniprogram
+project.config.json
+README.md
+.DS_Store
+
