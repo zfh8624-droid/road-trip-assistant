@@ -39,9 +39,9 @@ try {
     root: WEB_ROOT,
     prefix: '/',
     // cache 策略：带 hash 的 assets 长缓存，其它默认
-    setHeaders(res, filePath) {
+    setHeaders(reply, filePath) {
       if (filePath.includes('/assets/')) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+        reply.header('Cache-Control', 'public, max-age=31536000, immutable')
       }
     },
   })
