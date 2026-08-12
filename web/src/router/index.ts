@@ -1,0 +1,37 @@
+import { createRouter, createWebHashHistory } from 'vue-router'
+
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes: [
+    {
+      path: '/',
+      redirect: '/explore'
+    },
+    {
+      path: '/explore',
+      name: 'explore',
+      component: () => import('../views/ExploreView.vue'),
+      meta: { title: '探索' }
+    },
+    {
+      path: '/trips',
+      name: 'trips',
+      component: () => import('../views/TripsView.vue'),
+      meta: { title: '行程' }
+    },
+    {
+      path: '/favorites',
+      name: 'favorites',
+      component: () => import('../views/FavoritesView.vue'),
+      meta: { title: '收藏' }
+    },
+    {
+      path: '/profile',
+      name: 'profile',
+      component: () => import('../views/ProfileView.vue'),
+      meta: { title: '我的' }
+    }
+  ]
+})
+
+export default router
