@@ -6,4 +6,6 @@ miniprogram
 project.config.json
 README.md
 .DS_Store
-
+server/node_modules
+server/dist
+server/.env

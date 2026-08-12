@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id String @id @default(cuid())
+  openid String @unique
+  nickname String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  trips TripMember[]
+  favorites Favorite[]
+  sentInvites Invitation[] @relation("sent")
+  receivedInvites Invitation[] @relation("received")
+}
+
+model Trip {
+  id String @id @default(cuid())
+  title String
+  origin String
+  destination String
+  distanceKm Int?
+  days Int
+  preferences Json?
+  createdAt DateTime @default(now())
+  members TripMember[]
+  schedule TripDay[]
+  stops TripStop[]
+  invitations Invitation[]
+}
+
+model TripMember {
+  tripId String
+  userId String
+  role   String @default("member")
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([tripId, userId])
+}
+
+model TripDay {
+  id       String @id @default(cuid())
+  tripId   String
+  day      Int
+  location String
+  events   Json
+  trip     Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, day])
+}
+
+model TripStop {
+  id        String @id @default(cuid())
+  tripId    String
+  name      String
+  category  String
+  sort      Int
+  latitude  Float?
+  longitude Float?
+  metadata  Json?
+  trip      Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+}
+
+model Favorite {
+  userId    String
+  placeName String
+  category  String?
+  metadata  Json?
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, placeName])
+}
+
+model Invitation {
+  id          String   @id @default(cuid())
+  tripId      String
+  inviterId   String
+  inviteeId   String?
+  inviteeName String?
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  inviter     User     @relation("sent", fields: [inviterId], references: [id])
+  invitee     User?    @relation("received", fields: [inviteeId], references: [id])
+}

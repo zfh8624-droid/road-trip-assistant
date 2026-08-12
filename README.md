@@ -27,6 +27,32 @@
 
 正式接入高德数据时，需要在高德开放平台创建微信小程序应用，并在微信公众平台配置合法请求域名。Web 服务 Key 不应硬编码到小程序前端，建议通过云函数或自有后端转发。
 
+## 定制后端
+
+`server/` 是配套的 Node.js + TypeScript + Fastify + Prisma + PostgreSQL API，提供：
+
+- 微信 `code2Session` 登录
+- 行程、逐日日程和途经点存储
+- 收藏与同行邀请
+- 高德附近加油站、充电站代理
+
+在 Zeabur 新建 PostgreSQL 服务和后端服务，将后端服务根目录设为 `server`，并配置：
+
+```text
+DATABASE_URL=<Zeabur PostgreSQL 连接串>
+WECHAT_APPID=<微信小程序 AppID>
+WECHAT_SECRET=<微信小程序 Secret>
+AMAP_KEY=<高德 Web 服务 Key>
+```
+
+首次部署后在后端服务执行：
+
+```bash
+npx prisma migrate deploy
+```
+
+小程序只能访问已加入微信公众平台“服务器域名”的 HTTPS API 地址。
+
 ## Web 原型运行
 
 直接打开 `index.html`，或使用静态服务器：
