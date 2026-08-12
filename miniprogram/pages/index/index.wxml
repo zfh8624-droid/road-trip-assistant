@@ -1,0 +1,28 @@
+<view class="page">
+  <view class="top"><view class="brand"><view class="logo">路</view><view><text class="brand-name">行野</text><text class="brand-sub">WANDER ON YOUR TERMS</text></view></view><text class="bell">◌</text></view>
+  <view class="content">
+    <text class="eyebrow">下一站 · 自由出发</text><view class="hero">把风景装进\n<text>每一公里</text></view>
+    <view class="switch-row"><text>全国自驾路线</text><button size="mini" bindtap="switchRoute">换一条路线</button></view>
+    <view class="route-card">
+      <view class="route-cover"><text class="route-label">推荐路线 · {{route.no}}</text><view class="route-caption"><view><text class="route-name">{{route.name}}</text><text class="route-path">{{route.path}}</text></view><view class="route-km"><text>{{route.distance}}</text><text>{{route.days}} 日</text></view></view></view>
+      <view class="stats"><view bindtap="openRouteForm"><text>出发地 · 可选</text><text>{{origin}} ›</text></view><view bindtap="openDestination"><text>目的地 · 自设</text><text>{{destination}} ›</text></view><view><text>途经</text><text>{{route.stops.length}} 个</text></view></view>
+    </view>
+    <view class="action-row"><button bindtap="generateTrip">生成我的行程</button><button open-type="share" class="outline">邀请好友同行</button></view>
+
+    <view class="section-head"><text>沿途值得去</text><text class="link">{{route.name}}</text></view>
+    <scroll-view scroll-x class="chips"><text class="chip {{filter==='全部'?'active':''}}" data-filter="全部" bindtap="setFilter">全部</text><text class="chip {{filter==='景点'?'active':''}}" data-filter="景点" bindtap="setFilter">自然风光</text><text class="chip {{filter==='美食'?'active':''}}" data-filter="美食" bindtap="setFilter">当地美食</text></scroll-view>
+    <view class="spot-grid"><view wx:for="{{filteredSpots}}" wx:key="name" class="spot" bindtap="showSpot" data-index="{{index}}"><image src="{{item.image}}" mode="aspectFill"/><text class="tag">{{item.type}}</text><button class="heart" data-name="{{item.name}}" catchtap="toggleFavorite">{{item.saved?'♥':'♡'}}</button><text class="spot-name">{{item.name}}</text><text class="spot-info">{{item.info}}</text></view></view>
+
+    <view class="section-head" id="schedule"><text>为你排好的日程</text><text class="link" bindtap="generateTrip">重新生成</text></view>
+    <view class="schedule"><view class="schedule-head"><view><text>{{route.name}} · {{route.days}}日</text><text>{{preferences}}</text></view><button size="mini" bindtap="openRouteForm">调整偏好</button></view><scroll-view scroll-x class="days"><view wx:for="{{schedule}}" wx:key="day" class="day {{activeDay===index?'active':''}}" data-index="{{index}}" bindtap="selectDay">DAY<text>{{item.day}}</text></view></scroll-view><view class="timeline"><view wx:for="{{currentEvents}}" wx:key="time" class="event"><text class="time">{{item.time}}</text><view><text>{{item.title}}</text><text>{{item.desc}}</text></view></view></view></view>
+
+    <view class="section-head"><text>DAY {{schedule[activeDay].day}} · {{schedule[activeDay].location}}附近补给</text><text class="link" bindtap="openSupplyMap">打开地图</text></view>
+    <view class="supply" data-type="加油站" bindtap="openSupplyMap"><view class="supply-icon fuel">油</view><view><text>{{schedule[activeDay].location}}附近加油站</text><text>查看营业状态、油号与实时距离</text></view></view><view class="supply" data-type="充电站" bindtap="openSupplyMap"><view class="supply-icon charge">电</view><view><text>{{schedule[activeDay].location}}附近充电站</text><text>查看快充类型、空闲数量与实时距离</text></view></view>
+  </view>
+
+  <view class="tabbar"><view class="{{tab==='探索'?'active':''}}" data-tab="探索" bindtap="setTab">⌖<text>探索</text></view><view class="{{tab==='行程'?'active':''}}" data-tab="行程" bindtap="setTab">▣<text>行程</text></view><view class="{{tab==='收藏'?'active':''}}" data-tab="收藏" bindtap="setTab">♡<text>收藏</text></view><view class="{{tab==='我的'?'active':''}}" data-tab="我的" bindtap="setTab">○<text>我的</text></view></view>
+
+  <view wx:if="{{showRouteForm}}" class="mask" bindtap="closeModal"><view class="modal" catchtap="noop"><view class="modal-head"><text>自定义全国路线</text><text bindtap="closeModal">×</text></view><text class="field-label">出发城市</text><picker mode="selector" range="{{cities}}" bindchange="pickOrigin"><view class="picker">{{origin}} ›</view></picker><text class="field-label">目的地城市</text><picker mode="selector" range="{{cities}}" bindchange="pickDestination"><view class="picker">{{destination}} ›</view></picker><text class="field-label">路线偏好</text><checkbox-group bindchange="setPreferences"><label wx:for="{{preferenceOptions}}" wx:key="*this" class="check"><checkbox value="{{item}}" checked="{{selectedPreferences.indexOf(item)>-1}}"/>{{item}}</label></checkbox-group><button class="save" bindtap="saveRoute">保存并生成路线</button></view></view>
+
+  <view wx:if="{{showProfile}}" class="mask" bindtap="closeModal"><view class="modal" catchtap="noop"><view class="modal-head"><text>我的自驾空间</text><text bindtap="closeModal">×</text></view><view class="profile"><view class="avatar">我</view><view><text>自驾旅行者</text><text>轻松驾驶 · 自然风光 · 当地美食</text></view></view><view class="profile-stats"><view><text>1</text><text>我的行程</text></view><view><text>{{favorites.length}}</text><text>收藏地点</text></view><view><text>{{companions.length}}</text><text>同行好友</text></view></view><button open-type="share" class="save">邀请好友加入行程</button></view></view>
+</view>

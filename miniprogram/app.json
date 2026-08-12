@@ -1,0 +1,14 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "navigationBarTitleText": "行野自驾",
+    "navigationBarBackgroundColor": "#f7faf8",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7faf8"
+  },
+  "permission": {
+    "scope.userLocation": { "desc": "用于查询行程地点附近的加油站和充电站" }
+  },
+  "requiredPrivateInfos": ["getLocation", "chooseLocation"],
+  "sitemapLocation": "sitemap.json"
+}

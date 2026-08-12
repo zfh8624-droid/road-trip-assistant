@@ -1,0 +1,15 @@
+{
+  "description": "行野全国自驾微信小程序",
+  "packOptions": { "ignore": ["work", "index.html"] },
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "compileHotReLoad": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "trial",
+  "appid": "touristappid",
+  "projectname": "xingye-road-trip",
+  "miniprogramRoot": "miniprogram/"
+}
